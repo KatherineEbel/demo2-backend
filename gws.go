@@ -9,6 +9,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 
+	"go_systems/src/demo2Async"
+	"go_systems/src/demo2Redis"
 	"go_systems/src/websockets"
 )
 
@@ -38,6 +40,8 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	wsId := "ws-" + id.String()
 	fmt.Println(wsId)
 	fmt.Println(c.LocalAddr())
+	t := demo2Redis.NewRedisTask(c, "set-key", wsId, "noop")
+	demo2Async.TaskQueue <- t
 
 Loop:
 	for {
@@ -66,6 +70,7 @@ Loop:
 	}
 }
 func main() {
+	demo2Async.StartTaskDispatcher(8)
 	r := mux.NewRouter()
 	r.HandleFunc("/ws", handleAPI)
 	fmt.Printf("Serving TLS: %s", *addr)
