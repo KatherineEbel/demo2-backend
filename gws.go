@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -11,6 +12,7 @@ import (
 
 	"go_systems/src/demo2Async"
 	"go_systems/src/demo2Redis"
+	"go_systems/src/demo2Wsm"
 	"go_systems/src/websockets"
 )
 
@@ -22,6 +24,7 @@ const (
 var (
 	addr     = flag.String("addr", "0.0.0.0:1200", "http service address")
 	upgrader = websocket.Upgrader{}
+	pool     = demo2Wsm.NewPool()
 )
 
 func handleAPI(w http.ResponseWriter, r *http.Request) {
@@ -38,17 +41,33 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Error creating id: %s", err)
 	}
 	wsId := "ws-" + id.String()
-	fmt.Println(wsId)
-	fmt.Println(c.LocalAddr())
+	fmt.Println("wsID: ", wsId)
+	fmt.Println("conn local-addr ", c.LocalAddr())
 	t := demo2Redis.NewRedisTask(c, "set-key", wsId, "noop")
 	demo2Async.TaskQueue <- t
-
+	fc := &demo2Wsm.FatClient{
+		Id:   id,
+		Conn: c,
+		Pool: pool,
+	}
+	pool.Register <- fc
+	m := &websockets.Message{
+		Jwt:  "^vAr^",
+		Type: "client-websocket-id",
+		Data: id.String(),
+	}
+	if err := m.Send(c); err != nil {
+		fmt.Println("error sending message", err)
+	}
 Loop:
 	for {
 		in := websockets.Message{}
 
 		err := c.ReadJSON(&in)
 		if err != nil {
+			pool.Unregister <- fc
+			rt := demo2Redis.NewRedisTask(c, "del-key", wsId, "noop")
+			demo2Async.TaskQueue <- rt
 			_ = c.Close()
 			break Loop
 		}
@@ -61,6 +80,8 @@ Loop:
 			}
 			if err := m.Send(c); err != nil {
 				fmt.Printf("Message fail: %s", err)
+			} else {
+				fmt.Println("Message sent type= ", m.Type)
 			}
 			break
 		default:
@@ -69,11 +90,16 @@ Loop:
 		}
 	}
 }
+
 func main() {
-	demo2Async.StartTaskDispatcher(8)
+	flag.Parse()
+	log.SetFlags(0)
+	go demo2Async.StartTaskDispatcher(9)
+	go pool.Start()
+	go pool.NotifyWSList()
 	r := mux.NewRouter()
 	r.HandleFunc("/ws", handleAPI)
-	fmt.Printf("Serving TLS: %s", *addr)
+	fmt.Printf("Serving TLS: %s\n", *addr)
 	if err := http.ListenAndServeTLS(*addr, certPath, keyPath, r); err != nil {
 		panic(err)
 	}

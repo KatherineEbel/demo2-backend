@@ -55,11 +55,13 @@ func (t RedisTask) Perform() error {
 	var err error
 	switch t.kind {
 	case "set-key":
-		fmt.Println("Setting key: ", t.key)
 		err = RedisSet(t.key, t.value)
 		break
 	case "del-key":
+		fmt.Println("Setting key: ", t.key)
 		err = RedisDel(t.key)
+		_ = t.ws.Close()
+		break
 	default:
 		fmt.Println("Unknown value for kind: ", t.kind)
 	}
