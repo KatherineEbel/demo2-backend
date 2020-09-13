@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -11,7 +13,11 @@ import (
 	"github.com/gorilla/websocket"
 
 	"go_systems/src/demo2Async"
+	"go_systems/src/demo2Config"
+	"go_systems/src/demo2Jwt"
+	"go_systems/src/demo2Mongo"
 	"go_systems/src/demo2Redis"
+	"go_systems/src/demo2Utils"
 	"go_systems/src/demo2Wsm"
 	"go_systems/src/websockets"
 )
@@ -26,6 +32,76 @@ var (
 	upgrader = websocket.Upgrader{}
 	pool     = demo2Wsm.NewPool()
 )
+
+func sendJWTErr(c *websocket.Conn, err error) error {
+	m := &websockets.Message{
+		Jwt:  "noop",
+		Type: "invalid-credentials",
+		Data: err.Error(),
+	}
+	return m.Send(c)
+}
+
+func handleMessage(message *websockets.Message, c *websocket.Conn) {
+	switch message.Type {
+	case "get-jwt":
+		m, err := handleGetJWT(message.Data)
+		if err != nil {
+			fmt.Println(sendJWTErr(c, err))
+			break
+		}
+		fmt.Println(m.Send(c))
+		break
+	case "validate-jwt":
+		ok, err := demo2Jwt.ValidateJwt(demo2Config.PubKeyFile, message.Jwt)
+		if err != nil {
+			err = errors.New("server error while validating request")
+			fmt.Println(sendJWTErr(c, err))
+		}
+		d := struct {
+			Valid bool
+		}{ok}
+		md, err := json.Marshal(d)
+		m := &websockets.Message{
+			Jwt:  message.Jwt,
+			Type: "jwt-valid",
+			Data: string(md),
+		}
+		fmt.Println(m.Send(c))
+		break
+	default:
+		fmt.Println("Got unknown message type: ", message.Type)
+	}
+}
+func handleGetJWT(data string) (*websockets.Message, error) {
+	email, password, err := demo2Utils.B64DecodeUser(data)
+	if err != nil {
+		err = errors.New("invalid user data")
+		return nil, err
+	}
+	user, err := demo2Mongo.AuthenticateUser(email, password)
+	if err != nil {
+		err = errors.New("invalid user credentials")
+		return nil, err
+	}
+	user.Password = "foo"
+	d, err := json.Marshal(user)
+	if err != nil {
+		err = errors.New("server error")
+		return nil, err
+	}
+	jwt, err := demo2Jwt.GenerateJwt(demo2Config.PrivKeyFile)
+	if err != nil {
+		err = errors.New("server error creating JWT")
+		return nil, err
+	}
+	m := &websockets.Message{
+		Jwt:  jwt,
+		Type: "jwt-token",
+		Data: string(d),
+	}
+	return m, nil
+}
 
 func handleAPI(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool {
@@ -71,23 +147,8 @@ Loop:
 			_ = c.Close()
 			break Loop
 		}
-		switch in.Type {
-		case "register-client":
-			m := websockets.Message{
-				Jwt:  "^vAr^",
-				Type: "websocket-connect-success",
-				Data: wsId,
-			}
-			if err := m.Send(c); err != nil {
-				fmt.Printf("Message fail: %s", err)
-			} else {
-				fmt.Println("Message sent type= ", m.Type)
-			}
-			break
-		default:
-			fmt.Println("Default case")
-			break
-		}
+		handleMessage(&in, c)
+
 	}
 }
 
