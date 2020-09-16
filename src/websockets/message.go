@@ -13,6 +13,12 @@ type Message struct {
 	mu   sync.Mutex
 }
 
+type RestMessage struct {
+	Jwt  string `json:"jwt"`
+	Type string `json:"type"`
+	Data string `json:"data"`
+}
+
 func (m *Message) Send(c *websocket.Conn) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
