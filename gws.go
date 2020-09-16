@@ -17,6 +17,7 @@ import (
 	"go_systems/src/demo2Jwt"
 	"go_systems/src/demo2Mongo"
 	"go_systems/src/demo2Redis"
+	"go_systems/src/demo2Rest"
 	"go_systems/src/demo2Utils"
 	"go_systems/src/demo2Wsm"
 	"go_systems/src/websockets"
@@ -160,6 +161,11 @@ func main() {
 	go pool.NotifyWSList()
 	r := mux.NewRouter()
 	r.HandleFunc("/ws", handleAPI)
+
+	// Rest Routes
+	r.HandleFunc("/rest/upload", demo2Rest.HandleUpload)
+	// r.HandleFunc("/rest/filesystem", demo2Rest.HandleFileSystemAction)
+	fmt.Println("New line")
 	fmt.Printf("Serving TLS: %s\n", *addr)
 	if err := http.ListenAndServeTLS(*addr, certPath, keyPath, r); err != nil {
 		panic(err)

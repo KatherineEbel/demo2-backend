@@ -10,6 +10,10 @@ import (
 	"go_systems/src/demo2fs"
 )
 
+const (
+	FileStoragePath = "/var/www/uploads/"
+)
+
 var (
 	MongoHost = os.Getenv("MONGO_HOST")
 	MongoUser = os.Getenv("MONGO_USER")
