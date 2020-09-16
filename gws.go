@@ -164,6 +164,7 @@ func main() {
 
 	// Rest Routes
 	r.HandleFunc("/rest/upload", demo2Rest.HandleUpload)
+	r.HandleFunc("/rest/test/jwt", demo2Rest.HandleProtectedGetRequestTest)
 	// r.HandleFunc("/rest/filesystem", demo2Rest.HandleFileSystemAction)
 	fmt.Println("New line")
 	fmt.Printf("Serving TLS: %s\n", *addr)

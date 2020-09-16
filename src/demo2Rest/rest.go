@@ -38,14 +38,12 @@ func sendRestMsg(w *http.ResponseWriter, jwt string, msgType string, data string
 }
 
 func isAuthBearerValid(w http.ResponseWriter, r *http.Request, checkFor string) (bool, error) {
-	fmt.Println("Checking for Auth bearer header")
 	_, ok := r.Header["Authorization"]
 	if !ok {
 		return ok, errors.New("no Authorization Header")
 	}
 	header := r.Header.Get("Authorization")
 	bearer := strings.Split(header, " ")
-	fmt.Print(bearer)
 	valid, err := demo2Jwt.ValidateJwt(demo2Config.PubKeyFile, bearer[1])
 
 	switch checkFor {
@@ -72,6 +70,21 @@ func isAuthBearerValid(w http.ResponseWriter, r *http.Request, checkFor string) 
 		break
 	}
 	return valid, err
+}
+
+/** JWT Token Protection Tests **/
+func HandleProtectedGetRequestTest(w http.ResponseWriter, r *http.Request) {
+	addHeaders(&w)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+	ok, err := isAuthBearerValid(w, r, "rest-test")
+	if !ok {
+		return
+	}
+	fmt.Println("GOLDEN!!!")
+	fmt.Println(ok, err)
+
 }
 
 func HandleUpload(w http.ResponseWriter, r *http.Request) {
