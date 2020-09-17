@@ -6,11 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"go_systems/src/demo2Config"
 	"go_systems/src/demo2Jwt"
+	"go_systems/src/demo2Mongo"
+	"go_systems/src/demo2MySql"
+	"go_systems/src/demo2Users"
+	"go_systems/src/demo2Utils"
 	"go_systems/src/demo2fs"
 	"go_systems/src/websockets"
 )
@@ -56,13 +61,15 @@ func isAuthBearerValid(w http.ResponseWriter, r *http.Request, checkFor string) 
 	case "rest-test":
 		if err != nil {
 			fmt.Println(sendRestMsg(&w, "^vAr^", "rest-jwt-token-invalid", err.Error()))
+			break
 		} else if valid {
 			fmt.Println(sendRestMsg(&w, "^vAr^", "rest-jwt-token-valid", "/rest/jwt/test"))
 			break
 		}
 	case "noop":
 		if err != nil {
-			fmt.Println(sendRestMsg(&w, "vAr^", "rest-jwt-token-invalid", err.Error()))
+			fmt.Println(err.Error())
+			fmt.Println(sendRestMsg(&w, "vAr^", "rest-jwt-token-invalid", "noop"))
 		} else if valid {
 			// do nothing
 		}
@@ -131,4 +138,102 @@ func HandleUpload(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func HandleCreateUserMongo(w http.ResponseWriter, r *http.Request) {
+	addHeaders(&w)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+	if _, err := isAuthBearerValid(w, r, "noop"); err != nil {
+		return
+	}
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("Error reading request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 - Sorry, something went wrong..."))
+		return
+	}
+	fmt.Println("Request ", string(body))
+	user := demo2Users.AuthUser{}
+	if err := json.Unmarshal([]byte(body), &user); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 - Sorry, something went wrong..."))
+	}
+	fmt.Print("Encoded user: ", user)
+	pwHash, err := demo2Utils.GenerateUserPassword(user.Password)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 - Sorry, something went wrong..."))
+	}
+	user.Password = pwHash
+	fmt.Print("Checking for dock with Email then Alias...")
+	userExists := demo2Mongo.CheckDocumentExists("api", "users", "email", user.Email)
+	aliasExists := demo2Mongo.CheckDocumentExists("api", "users", "alias", user.Alias)
+	if userExists || aliasExists {
+		fmt.Println("user exists")
+		msgAry := "["
+		if userExists {
+			msgAry += "'user email in system'"
+		}
+		if aliasExists {
+			msgAry += "'user alias exists in system'"
+		}
+		msgAry += "]"
+		fmt.Println("Error: ", sendRestMsg(&w, "^vAr^", "rest-create-user-fail", msgAry))
+	}
+	mDoc, err := json.Marshal(user)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 - Sorry, something went wrong..."))
+		return
+	}
+	docId, err := demo2Mongo.InsertDocument("api", "users", mDoc)
+	if err != nil {
+		fmt.Println("Error inserting user", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 - Sorry, something went wrong..."))
+		return
+	}
+	data, err := json.Marshal(struct {
+		docId string
+	}{docId})
+	fmt.Println(sendRestMsg(&w, "^vAr^", "rest-create-user-success", string(data)))
+}
+
+func HandleCreateUserMySql(w http.ResponseWriter, r *http.Request) {
+	addHeaders(&w)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+	if ok, err := isAuthBearerValid(w, r, "noop"); err != nil || !ok {
+		fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-failure", "Auth token error"))
+		return
+	}
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-failure", "parse-body error"))
+		return
+	}
+	user := demo2MySql.MySqlStoredUser{}
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-failure", "unmarshal error"))
+		return
+	}
+	uuid, err := demo2Utils.GenerateUUID()
+	if err != nil {
+		fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-failure", "uuid-error"))
+		return
+	}
+	pass := demo2Utils.SHA256OfString(user.Password)
+	user.UUID = uuid
+	user.Password = pass
+	err = demo2MySql.CreateUser("demo2", &user)
+	if err != nil {
+		fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-failure", "my-sql-error"))
+		return
+	}
+	fmt.Println(sendRestMsg(&w, "^vAr^", "rest-test-create-mysql-user-success", "TAHDAH!"))
 }

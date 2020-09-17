@@ -159,6 +159,7 @@ func main() {
 	go demo2Async.StartTaskDispatcher(9)
 	go pool.Start()
 	go pool.NotifyWSList()
+
 	r := mux.NewRouter()
 	r.HandleFunc("/ws", handleAPI)
 
@@ -166,6 +167,9 @@ func main() {
 	r.HandleFunc("/rest/upload", demo2Rest.HandleUpload)
 	r.HandleFunc("/rest/test/jwt", demo2Rest.HandleProtectedGetRequestTest)
 	// r.HandleFunc("/rest/filesystem", demo2Rest.HandleFileSystemAction)
+
+	r.HandleFunc("/rest/admin/create/user/mongo", demo2Rest.HandleCreateUserMongo)
+	r.HandleFunc("/rest/admin/create/user/mysql", demo2Rest.HandleCreateUserMySql)
 	fmt.Println("New line")
 	fmt.Printf("Serving TLS: %s\n", *addr)
 	if err := http.ListenAndServeTLS(*addr, certPath, keyPath, r); err != nil {

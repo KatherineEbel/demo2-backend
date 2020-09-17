@@ -1,8 +1,11 @@
 package demo2Utils
 
 import (
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"encoding/json"
+	"fmt"
+	"os"
 
 	"go_systems/src/demo2Users"
 
@@ -32,4 +35,27 @@ func GenerateUserPassword(p string) (string, error) {
 		return "", err
 	}
 	return string(hp), nil
+}
+
+func SHA256OfString(input string) string {
+	sum := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", sum)
+}
+
+func GenerateUUID() (string, error) {
+	f, err := os.Open("/dev/urandom")
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println("Error closing ", f.Name())
+		}
+	}()
+	if err != nil {
+		return "", err
+	}
+	b := make([]byte, 16)
+	if _, err = f.Read(b); err != nil {
+		return "", err
+	}
+	uuid := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return uuid, nil
 }
