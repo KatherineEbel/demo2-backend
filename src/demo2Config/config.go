@@ -15,6 +15,8 @@ const (
 )
 
 var (
+	MySqlUser = os.Getenv("MYSQL_USER")
+	MySqlPass = os.Getenv("MYSQL_PASS")
 	MongoHost = os.Getenv("MONGO_HOST")
 	MongoUser = os.Getenv("MONGO_USER")
 	MongoPass = os.Getenv("MONGO_PASS")

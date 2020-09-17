@@ -2,8 +2,10 @@ package demo2Mongo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"go_systems/src/demo2Config"
@@ -77,4 +79,30 @@ func AuthenticateUser(e []byte, p []byte) (*demo2Users.AuthUser, error) {
 		return nil, err
 	}
 	return &doc, nil
+}
+
+func CheckDocumentExists(db string, col string, key string, value string) bool {
+	var doc interface{}
+	filter := bson.D{{key, value}}
+	collection := client.Database(db).Collection(col)
+	err := collection.FindOne(ctx, filter).Decode(&doc)
+	return err != nil && doc == nil
+}
+
+func InsertDocument(db string, col string, doc []byte) (string, error) {
+	collection := client.Database(db).Collection(col)
+	var iDoc map[string]interface{}
+	err := json.Unmarshal(doc, &iDoc)
+	if err != nil {
+		return "noop", err
+	}
+	if _, ok := iDoc["_id"]; ok {
+		fmt.Println("Doc isn't new")
+		return "noop", nil
+	}
+	result, err := collection.InsertOne(ctx, &iDoc)
+	if err != nil {
+		return "noop", err
+	}
+	return result.InsertedID.(primitive.ObjectID).Hex(), nil
 }
